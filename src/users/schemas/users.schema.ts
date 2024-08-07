@@ -8,8 +8,14 @@ export class User {
   @Prop()
   name: string;
 
+  @Prop({ unique: true })
+  email: string;
+
   @Prop()
-  age: number;
+  password: string;
+
+  @Prop()
+  role: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
