@@ -5,11 +5,11 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { RegisterAuthDto } from './dto/register-auth.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
 import * as bcrypt from 'bcrypt';
-import { Roles } from 'src/constants';
+import { ROLES } from 'src/common/constants';
 import { JwtService } from '@nestjs/jwt';
 
 const SALT_OR_ROUNDS = 10;
-type Role = (typeof Roles)[keyof typeof Roles];
+type Role = (typeof ROLES)[keyof typeof ROLES];
 
 @Injectable()
 export class AuthService {
@@ -24,7 +24,7 @@ export class AuthService {
 
     userObject = { ...userObject, password: toHash };
 
-    const validRole = Object.values(Roles).includes(role as Role);
+    const validRole = Object.values(ROLES).includes(role as Role);
     if (!validRole) {
       throw new HttpException('INVALID_ROL', HttpStatus.BAD_REQUEST);
     }
@@ -57,14 +57,13 @@ export class AuthService {
 
     const token = this.jwtService.sign({
       id: findUser._id,
-      name: findUser.name,
+      email: findUser.email,
       role: findUser.role,
     });
 
-    delete findUser.password;
     const data = {
       user: {
-        id: findUser._id,
+        _id: findUser._id,
         name: findUser.name,
         email: findUser.email,
         role: findUser.role,

@@ -13,12 +13,13 @@ async function bootstrap() {
     .setVersion('1.0')
     .addTag('auth')
     .addTag('users')
+    .addTag('products')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
   app.useGlobalPipes(new ValidationPipe());
 
-  await app.listen(8080);
+  await app.listen(process.env.PORT);
 }
 bootstrap();
