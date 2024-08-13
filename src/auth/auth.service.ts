@@ -1,75 +1,86 @@
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User } from 'src/users/schemas/users.schema';
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { RegisterAuthDto } from './dto/register-auth.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
 import * as bcrypt from 'bcrypt';
-import { ROLES } from 'src/common/constants';
+import { SALT_OR_ROUNDS } from 'src/common/constants';
 import { JwtService } from '@nestjs/jwt';
-
-const SALT_OR_ROUNDS = 10;
-type Role = (typeof ROLES)[keyof typeof ROLES];
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   constructor(
     private jwtService: JwtService,
     @InjectModel(User.name) private userModel: Model<User>,
   ) {}
 
   async register(userObject: RegisterAuthDto) {
-    const { password, role } = userObject;
-    const toHash = await bcrypt.hash(password, SALT_OR_ROUNDS);
+    try {
+      const { password } = userObject;
+      const toHash = await bcrypt.hash(password, SALT_OR_ROUNDS);
 
-    userObject = { ...userObject, password: toHash };
+      userObject = { ...userObject, password: toHash };
 
-    const validRole = Object.values(ROLES).includes(role as Role);
-    if (!validRole) {
-      throw new HttpException('INVALID_ROL', HttpStatus.BAD_REQUEST);
-    }
+      await this.userModel.create(userObject);
 
-    return this.userModel.create(userObject).catch((err) => {
+      return {
+        message: 'Account successfully created',
+        status: HttpStatus.CREATED,
+      };
+    } catch (err) {
       if (err.code === 11000) {
+        this.logger.error(err, 'POST AUTH -- SERVICE');
         throw new HttpException(
-          'THIS_EMAIL_ALREADY_EXISTS',
+          'This email already exists',
           HttpStatus.NOT_ACCEPTABLE,
         );
       } else {
+        this.logger.error(err, 'POST AUTH -- SERVICE');
         throw new HttpException(
-          'AN_ERROR_OCCURRED',
+          'An error occurred while creating the account',
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
-    });
+    }
   }
 
   async login(userObject: LoginAuthDto) {
-    const { email, password } = userObject;
-    const findUser = await this.userModel.findOne({ email });
+    try {
+      const { email, password } = userObject;
+      const findUser = await this.userModel.findOne({ email });
 
-    if (!findUser)
-      throw new HttpException('USER_NOT_FOUND', HttpStatus.NOT_FOUND);
+      if (!findUser)
+        throw new HttpException('USER_NOT_FOUND', HttpStatus.NOT_FOUND);
 
-    const checkPassword = await bcrypt.compare(password, findUser.password);
-    if (!checkPassword)
-      throw new HttpException('PASSWORD_INCORRECT', HttpStatus.FORBIDDEN);
+      const checkPassword = await bcrypt.compare(password, findUser.password);
+      if (!checkPassword)
+        throw new HttpException('INCORRECT_PASSWORD', HttpStatus.FORBIDDEN);
 
-    const token = this.jwtService.sign({
-      id: findUser._id,
-      email: findUser.email,
-      role: findUser.role,
-    });
-
-    const data = {
-      user: {
-        _id: findUser._id,
-        name: findUser.name,
+      const token = this.jwtService.sign({
+        id: findUser._id,
         email: findUser.email,
         role: findUser.role,
-      },
-      token,
-    };
-    return data;
+      });
+
+      const data = {
+        user: {
+          _id: findUser._id,
+          name: findUser.name,
+          email: findUser.email,
+          role: findUser.role,
+        },
+        token,
+      };
+
+      return data;
+    } catch (err) {
+      this.logger.error(err, 'POST AUTH -- SERVICE');
+      throw new HttpException(
+        'An error has occurred during the account sign-in process',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }

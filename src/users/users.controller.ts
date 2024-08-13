@@ -8,7 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { QueryUserDto, UpdateUserDto } from './dto';
+import { ChangePasswordDto, QueryUserDto, UpdateUserDto } from './dto';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { User } from 'src/common/decorators';
 import { Authorized } from 'src/common/decorators/authorized.decorator';
@@ -31,12 +31,17 @@ export class UsersController {
   }
 
   @Patch()
-  update(@User('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+  update(@User('id') userId: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(userId, updateUserDto);
   }
 
   @Delete()
-  remove(@User('id') id: string) {
-    return this.usersService.remove(id);
+  remove(@User('id') userId: string) {
+    return this.usersService.remove(userId);
+  }
+
+  @Patch('change-password')
+  changePassword(@User('id') userId: string, @Body() body: ChangePasswordDto) {
+    return this.usersService.changePassword(userId, body);
   }
 }

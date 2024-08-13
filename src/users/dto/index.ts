@@ -1,4 +1,3 @@
-import { UpdateUserDto } from './update-user.dto';
-import { QueryUserDto } from './query-user.dto';
-
-export { UpdateUserDto, QueryUserDto };
+export { UpdateUserDto } from './update-user.dto';
+export { QueryUserDto } from './query-user.dto';
+export { ChangePasswordDto } from './change-password.dto';

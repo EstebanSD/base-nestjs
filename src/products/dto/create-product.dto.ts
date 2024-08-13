@@ -1,11 +1,12 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsString } from 'class-validator';
+import { PRODUCT_TYPES } from 'src/common/constants';
 
 export class CreateProductDto {
   @IsString()
   @IsNotEmpty()
   name: string;
 
-  @IsString()
+  @IsEnum(PRODUCT_TYPES)
   @IsNotEmpty()
-  type: string;
+  type: PRODUCT_TYPES;
 }

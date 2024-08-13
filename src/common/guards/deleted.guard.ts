@@ -15,9 +15,11 @@ export class DeletedGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
     if (user?.id) {
-      const { deleted } = await this.userModel.findById(user.id).lean();
+      const userDB = await this.userModel.findById(user.id).lean();
 
-      if (deleted) throw new ForbiddenException('Your account is deleted');
+      if (!userDB) throw new ForbiddenException('Your account not exist');
+      if (userDB.deleted)
+        throw new ForbiddenException('Your account is deleted');
 
       return true;
     }
