@@ -10,7 +10,12 @@ import {
 
 export class EnvValidation {
   @IsNumber()
+  @IsOptional()
   PORT: number;
+
+  @IsString()
+  @IsOptional()
+  CLIENT_URL: string;
 
   @IsString()
   @IsNotEmpty()

@@ -24,9 +24,10 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe());
 
   const port = configService.get<number>('port');
+  const clientUrl = configService.get<string>('client');
 
   app.enableCors({
-    origin: 'http://localhost:3000',
+    origin: clientUrl,
     allowedHeaders: 'Content-Type, Authorization',
     credentials: true,
   });
