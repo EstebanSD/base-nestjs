@@ -15,9 +15,9 @@ import { Roles, User } from 'src/common/decorators';
 import { Authorized } from 'src/common/decorators/authorized.decorator';
 
 @ApiBearerAuth()
-@ApiTags('products')
+@ApiTags('product')
 @Authorized()
-@Controller('products')
+@Controller('product')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 

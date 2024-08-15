@@ -18,8 +18,8 @@ async function bootstrap() {
     .setDescription('The base nestjs API description')
     .setVersion('1.0')
     .addTag('auth')
-    .addTag('users')
-    .addTag('products')
+    .addTag('user')
+    .addTag('product')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);

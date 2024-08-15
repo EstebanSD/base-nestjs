@@ -20,9 +20,9 @@ import { extname } from 'path';
 import { FILE_DIRECTORY } from 'src/common/constants';
 
 @ApiBearerAuth()
-@ApiTags('users')
+@ApiTags('user')
 @Authorized()
-@Controller('users')
+@Controller('user')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
