@@ -15,6 +15,10 @@ export class EnvValidation {
 
   @IsString()
   @IsOptional()
+  BASE_URL: string;
+
+  @IsString()
+  @IsOptional()
   CLIENT_URL: string;
 
   @IsString()

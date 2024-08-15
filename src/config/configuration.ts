@@ -1,5 +1,6 @@
 export default () => ({
   port: parseInt(process.env.PORT, 10) || 8080,
+  baseUrl: process.env.BASE_URL || 'http://localhost:8080',
   client: process.env.CLIENT_URL || 'http://localhost:3000',
   database: {
     uri: process.env.MONGO_URI,

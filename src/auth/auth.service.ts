@@ -5,8 +5,9 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { RegisterAuthDto } from './dto/register-auth.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
 import * as bcrypt from 'bcrypt';
-import { SALT_OR_ROUNDS } from 'src/common/constants';
+import { FILE_DIRECTORY, SALT_OR_ROUNDS } from 'src/common/constants';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
@@ -14,6 +15,7 @@ export class AuthService {
   constructor(
     private jwtService: JwtService,
     @InjectModel(User.name) private userModel: Model<User>,
+    private readonly configService: ConfigService,
   ) {}
 
   async register(userObject: RegisterAuthDto) {
@@ -64,17 +66,19 @@ export class AuthService {
         role: findUser.role,
       });
 
-      const data = {
-        user: {
-          _id: findUser._id,
-          name: findUser.name,
-          email: findUser.email,
-          role: findUser.role,
-        },
-        token,
-      };
+      const host = this.configService.get<string>('baseUrl');
+      const user = Object.fromEntries(
+        Object.entries(findUser.toObject())
+          .filter(([key]) => key !== 'password')
+          .map(([key, value]) => [
+            key,
+            key === 'picture' && value
+              ? `${host}/${FILE_DIRECTORY}/${value}`
+              : value,
+          ]),
+      );
 
-      return data;
+      return { user, token };
     } catch (err) {
       this.logger.error(err, 'POST AUTH -- SERVICE');
       throw new HttpException(

@@ -3,6 +3,9 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as express from 'express';
+import { join } from 'path';
+import { FILE_DIRECTORY } from './common/constants';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -31,6 +34,12 @@ async function bootstrap() {
     allowedHeaders: 'Content-Type, Authorization',
     credentials: true,
   });
+
+  // Serve static files from folder /uploads
+  app.use(
+    `/${FILE_DIRECTORY}`,
+    express.static(join(__dirname, '..', FILE_DIRECTORY)),
+  );
 
   await app.listen(port);
 }

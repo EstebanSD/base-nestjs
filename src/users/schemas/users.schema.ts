@@ -17,6 +17,9 @@ export class User {
   @Prop()
   role: string;
 
+  @Prop({ default: null, required: false })
+  picture: string;
+
   @Prop({ default: false })
   deleted: boolean;
 }

@@ -10,13 +10,19 @@ import { Model } from 'mongoose';
 import { User } from './schemas/users.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
-import { SALT_OR_ROUNDS } from 'src/common/constants';
+import { FILE_DIRECTORY, SALT_OR_ROUNDS } from 'src/common/constants';
+import * as fs from 'fs';
+import * as path from 'path';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(@InjectModel(User.name) private userModel: Model<User>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<User>,
+    private readonly configService: ConfigService,
+  ) {}
 
   async findAll({
     deleted = false,
@@ -44,6 +50,15 @@ export class UsersService {
         .limit(limit)
         .select('-password');
 
+      // ADD PICTURE
+      users.forEach((user) => {
+        if (user.picture) {
+          const host = this.configService.get<string>('baseUrl');
+          user.picture = `${host}/${FILE_DIRECTORY}/${user.picture}`;
+        }
+        return user;
+      });
+
       return { data: users, status: HttpStatus.OK };
     } catch (err) {
       this.logger.error(err, 'GET USERS -- SERVICE');
@@ -60,6 +75,12 @@ export class UsersService {
         'GET ONE USER -- SERVICE',
       );
       throw new NotFoundException('User not found');
+    }
+
+    // ADD PICTURE
+    if (user.picture) {
+      const host = this.configService.get<string>('client');
+      user.picture = `${host}/${FILE_DIRECTORY}/${user.picture}`;
     }
 
     return { data: user, status: HttpStatus.OK };
@@ -151,6 +172,52 @@ export class UsersService {
       this.logger.error(err, 'CHANGE PASSWORD USER -- SERVICE');
       throw new HttpException(
         'Error updating user password',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async changePicture(userId: string, fileName: string) {
+    try {
+      const user = await this.userModel.findById(userId);
+      if (user.picture) {
+        const files = fs.readdirSync(`./${FILE_DIRECTORY}`);
+
+        files.forEach((existingFile) => {
+          const existingFilePath = path.join(
+            `./${FILE_DIRECTORY}`,
+            existingFile,
+          );
+          if (
+            fs.existsSync(existingFilePath) &&
+            existingFile === user.picture
+          ) {
+            fs.unlinkSync(existingFilePath);
+          }
+        });
+      }
+    } catch (err) {
+      this.logger.error(err, 'CHANGE PICTURE USER -- SERVICE');
+      throw new HttpException(
+        'Error trying to delete previous user picture',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    try {
+      await this.userModel.findByIdAndUpdate(userId, {
+        picture: fileName,
+      });
+
+      return {
+        message: 'File successfully uploaded',
+        fileName,
+        status: HttpStatus.OK,
+      };
+    } catch (err) {
+      this.logger.error(err, 'CHANGE PICTURE USER -- SERVICE');
+      throw new HttpException(
+        'Error uploading user picture',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
