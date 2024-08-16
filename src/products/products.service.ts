@@ -1,8 +1,8 @@
 import {
   ForbiddenException,
-  HttpException,
   HttpStatus,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
@@ -33,9 +33,8 @@ export class ProductsService {
       };
     } catch (err) {
       this.logger.error(err, 'POST PRODUCT -- SERVICE');
-      throw new HttpException(
+      throw new InternalServerErrorException(
         'An error occurred while creating the product',
-        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -65,9 +64,8 @@ export class ProductsService {
       return { data: products, status: HttpStatus.OK };
     } catch (err) {
       this.logger.error(err, 'GET ALL PRODUCTS -- SERVICE');
-      throw new HttpException(
+      throw new InternalServerErrorException(
         'An error occurred trying to get all the products',
-        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -93,9 +91,8 @@ export class ProductsService {
       }
 
       this.logger.error(err, 'GET PRODUCT -- SERVICE');
-      throw new HttpException(
+      throw new InternalServerErrorException(
         'An error occurred trying to get the product',
-        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -129,28 +126,38 @@ export class ProductsService {
       return { data: productUpdated, status: HttpStatus.OK };
     } catch (err) {
       this.logger.error(err, 'PATCH PRODUCT -- SERVICE');
-      throw new HttpException(
+      throw new InternalServerErrorException(
         'An error occurred while updating the product',
-        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
   async remove(id: string) {
-    const product = await this.productModel.findByIdAndDelete(id);
+    try {
+      const product = await this.productModel.findByIdAndDelete(id);
 
-    if (!product) {
-      this.logger.error(
-        `Product with ID ${id} not found`,
-        'GET ONE PRODUCT -- SERVICE',
+      if (!product) {
+        this.logger.error(
+          `Product with ID ${id} not found`,
+          'GET ONE PRODUCT -- SERVICE',
+        );
+        throw new NotFoundException('Product not found');
+      }
+
+      return {
+        data: {},
+        message: 'Product successfully deleted',
+        status: HttpStatus.OK,
+      };
+    } catch (err) {
+      if (err instanceof NotFoundException) {
+        throw err;
+      }
+
+      this.logger.error(err, 'DELETE PRODUCT -- SERVICE');
+      throw new InternalServerErrorException(
+        'An error occurred trying remove the product',
       );
-      throw new NotFoundException('Product not found');
     }
-
-    return {
-      data: {},
-      message: 'Product successfully deleted',
-      status: HttpStatus.OK,
-    };
   }
 }
