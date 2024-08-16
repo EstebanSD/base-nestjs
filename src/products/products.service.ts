@@ -88,6 +88,10 @@ export class ProductsService {
 
       return { data: product, status: HttpStatus.OK };
     } catch (err) {
+      if (err instanceof NotFoundException) {
+        throw err;
+      }
+
       this.logger.error(err, 'GET PRODUCT -- SERVICE');
       throw new HttpException(
         'An error occurred trying to get the product',

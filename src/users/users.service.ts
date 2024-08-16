@@ -1,8 +1,10 @@
 import {
-  HttpException,
+  ForbiddenException,
   HttpStatus,
   Injectable,
+  InternalServerErrorException,
   Logger,
+  NotAcceptableException,
   NotFoundException,
 } from '@nestjs/common';
 import { UpdateUserDto, QueryUserDto, ChangePasswordDto } from './dto';
@@ -62,28 +64,41 @@ export class UsersService {
       return { data: users, status: HttpStatus.OK };
     } catch (err) {
       this.logger.error(err, 'GET USERS -- SERVICE');
-      throw new HttpException(err.message, err.status);
+      throw new InternalServerErrorException(
+        'An error ocurred trying to get all the users',
+      );
     }
   }
 
   async findOne(id: string) {
-    const user = await this.userModel.findById(id).select('-password');
+    try {
+      const user = await this.userModel.findById(id).select('-password');
 
-    if (!user) {
-      this.logger.error(
-        `User with ID ${id} not found`,
-        'GET ONE USER -- SERVICE',
+      if (!user) {
+        this.logger.error(
+          `User with ID ${id} not found`,
+          'GET ONE USER -- SERVICE',
+        );
+        throw new NotFoundException('User not found');
+      }
+
+      // ADD PICTURE
+      if (user.picture) {
+        const host = this.configService.get<string>('client');
+        user.picture = `${host}/${FILE_DIRECTORY}/${user.picture}`;
+      }
+
+      return { data: user, status: HttpStatus.OK };
+    } catch (err) {
+      if (err instanceof NotFoundException) {
+        throw err;
+      }
+
+      this.logger.error(err, 'GET USER -- SERVICE');
+      throw new InternalServerErrorException(
+        'An error occurred trying to get the user',
       );
-      throw new NotFoundException('User not found');
     }
-
-    // ADD PICTURE
-    if (user.picture) {
-      const host = this.configService.get<string>('client');
-      user.picture = `${host}/${FILE_DIRECTORY}/${user.picture}`;
-    }
-
-    return { data: user, status: HttpStatus.OK };
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
@@ -99,17 +114,17 @@ export class UsersService {
 
       return { data: user, status: HttpStatus.OK };
     } catch (err) {
+      if (err instanceof NotFoundException) {
+        throw err;
+      }
+
       if (err.code === 11000) {
         this.logger.error(err, 'UPDATE USER -- SERVICE');
-        throw new HttpException(
-          'THIS_EMAIL_ALREADY_EXISTS',
-          HttpStatus.NOT_ACCEPTABLE,
-        );
+        throw new NotAcceptableException('This email already exists');
       } else {
         this.logger.error(err, 'UPDATE USER -- SERVICE');
-        throw new HttpException(
-          'AN_ERROR_OCCURRED',
-          HttpStatus.INTERNAL_SERVER_ERROR,
+        throw new InternalServerErrorException(
+          'An error occurred trying to update the current user',
         );
       }
     }
@@ -135,10 +150,13 @@ export class UsersService {
         status: HttpStatus.OK,
       };
     } catch (err) {
+      if (err instanceof NotFoundException) {
+        throw err;
+      }
+
       this.logger.error(err.message, 'DELETE USER -- SERVICE');
-      throw new HttpException(
+      throw new InternalServerErrorException(
         'An error occurred while deleting the user',
-        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -157,8 +175,13 @@ export class UsersService {
     }
 
     const checkPassword = await bcrypt.compare(oldPassword, user.password);
-    if (!checkPassword)
-      throw new HttpException('INCORRECT_PASSWORD', HttpStatus.FORBIDDEN);
+    if (!checkPassword) {
+      this.logger.error(
+        'Incorrect password',
+        'CHANGE PASSWORD USER -- SERVICE',
+      );
+      throw new ForbiddenException('Incorrect password');
+    }
 
     const hashedPassword = await bcrypt.hash(newPassword, SALT_OR_ROUNDS);
 
@@ -170,16 +193,14 @@ export class UsersService {
       return { data: user, status: HttpStatus.OK };
     } catch (err) {
       this.logger.error(err, 'CHANGE PASSWORD USER -- SERVICE');
-      throw new HttpException(
-        'Error updating user password',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw new InternalServerErrorException('Error updating user password');
     }
   }
 
   async changePicture(userId: string, fileName: string) {
     try {
       const user = await this.userModel.findById(userId);
+
       if (user.picture) {
         const files = fs.readdirSync(`./${FILE_DIRECTORY}`);
 
@@ -196,15 +217,7 @@ export class UsersService {
           }
         });
       }
-    } catch (err) {
-      this.logger.error(err, 'CHANGE PICTURE USER -- SERVICE');
-      throw new HttpException(
-        'Error trying to delete previous user picture',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
 
-    try {
       await this.userModel.findByIdAndUpdate(userId, {
         picture: fileName,
       });
@@ -216,9 +229,8 @@ export class UsersService {
       };
     } catch (err) {
       this.logger.error(err, 'CHANGE PICTURE USER -- SERVICE');
-      throw new HttpException(
-        'Error uploading user picture',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+      throw new InternalServerErrorException(
+        'Error uploading the user picture',
       );
     }
   }

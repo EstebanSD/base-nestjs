@@ -1,7 +1,15 @@
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User } from 'src/users/schemas/users.schema';
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  HttpStatus,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotAcceptableException,
+  NotFoundException,
+} from '@nestjs/common';
 import { RegisterAuthDto } from './dto/register-auth.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
 import * as bcrypt from 'bcrypt';
@@ -34,32 +42,32 @@ export class AuthService {
     } catch (err) {
       if (err.code === 11000) {
         this.logger.error(err, 'POST AUTH -- SERVICE');
-        throw new HttpException(
-          'This email already exists',
-          HttpStatus.NOT_ACCEPTABLE,
-        );
+        throw new NotAcceptableException('This email already exists');
       } else {
         this.logger.error(err, 'POST AUTH -- SERVICE');
-        throw new HttpException(
+        throw new InternalServerErrorException(
           'An error occurred while creating the account',
-          HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
     }
   }
 
   async login(userObject: LoginAuthDto) {
+    const { email, password } = userObject;
+    const findUser = await this.userModel.findOne({ email });
+
+    if (!findUser) {
+      this.logger.error(`User not found`, 'POST AUTH -- SERVICE');
+      throw new NotFoundException('User not found');
+    }
+
+    const checkPassword = await bcrypt.compare(password, findUser.password);
+    if (!checkPassword) {
+      this.logger.error(`Incorrect password`, 'POST AUTH -- SERVICE');
+      throw new ForbiddenException('Incorrect password');
+    }
+
     try {
-      const { email, password } = userObject;
-      const findUser = await this.userModel.findOne({ email });
-
-      if (!findUser)
-        throw new HttpException('USER_NOT_FOUND', HttpStatus.NOT_FOUND);
-
-      const checkPassword = await bcrypt.compare(password, findUser.password);
-      if (!checkPassword)
-        throw new HttpException('INCORRECT_PASSWORD', HttpStatus.FORBIDDEN);
-
       const token = this.jwtService.sign({
         id: findUser._id,
         email: findUser.email,
@@ -81,9 +89,8 @@ export class AuthService {
       return { user, token };
     } catch (err) {
       this.logger.error(err, 'POST AUTH -- SERVICE');
-      throw new HttpException(
+      throw new InternalServerErrorException(
         'An error has occurred during the account sign-in process',
-        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
