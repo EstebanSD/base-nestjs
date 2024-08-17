@@ -10,6 +10,8 @@ import { CreateProductDto, QueryProductDto, UpdateProductDto } from './dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Product } from './schemas/products.schema';
+import { NotificationGateway } from 'src/notifications/notification.gateway';
+import { IUser } from 'src/common/interfaces/user.interface';
 
 @Injectable()
 export class ProductsService {
@@ -17,14 +19,17 @@ export class ProductsService {
 
   constructor(
     @InjectModel(Product.name) private productModel: Model<Product>,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
-  async create(id: string, createProductDto: CreateProductDto) {
+  async create(user: IUser, createProductDto: CreateProductDto) {
     try {
-      await this.productModel.create({
-        user: id,
+      const product = await this.productModel.create({
+        user: user.id,
         ...createProductDto,
       });
+
+      this.notificationGateway.notifyProductCreated(user, product.name);
 
       return {
         data: {},
@@ -132,7 +137,7 @@ export class ProductsService {
     }
   }
 
-  async remove(id: string) {
+  async remove(user: IUser, id: string) {
     try {
       const product = await this.productModel.findByIdAndDelete(id);
 
@@ -144,6 +149,7 @@ export class ProductsService {
         throw new NotFoundException('Product not found');
       }
 
+      this.notificationGateway.notifyProductDeleted(user, product.name);
       return {
         data: {},
         message: 'Product successfully deleted',

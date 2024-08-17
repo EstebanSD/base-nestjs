@@ -70,6 +70,7 @@ export class AuthService {
     try {
       const token = this.jwtService.sign({
         id: findUser._id,
+        name: findUser.name,
         email: findUser.email,
         role: findUser.role,
       });
@@ -91,6 +92,24 @@ export class AuthService {
       this.logger.error(err, 'POST AUTH -- SERVICE');
       throw new InternalServerErrorException(
         'An error has occurred during the account sign-in process',
+      );
+    }
+  }
+
+  async getUserFromAuthenticationToken(token: string) {
+    try {
+      const payload = this.jwtService.verify(token, {
+        secret: this.configService.get('jwt.secret'),
+      });
+
+      if (payload?.id) {
+        return this.userModel.findById(payload.id).select('id');
+      }
+      return null;
+    } catch (err) {
+      this.logger.error(err, 'AUTH -- SERVICE');
+      throw new InternalServerErrorException(
+        'An error has occurred trying to authenticate the user',
       );
     }
   }

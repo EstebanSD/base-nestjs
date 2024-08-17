@@ -13,6 +13,7 @@ import { CreateProductDto, QueryProductDto, UpdateProductDto } from './dto';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles, User } from 'src/common/decorators';
 import { Authorized } from 'src/common/decorators/authorized.decorator';
+import { IUser } from 'src/common/interfaces/user.interface';
 
 @ApiBearerAuth()
 @ApiTags('product')
@@ -23,8 +24,8 @@ export class ProductsController {
 
   @Roles('Admin')
   @Post()
-  create(@User('id') id: string, @Body() createProductDto: CreateProductDto) {
-    return this.productsService.create(id, createProductDto);
+  create(@User() user: IUser, @Body() createProductDto: CreateProductDto) {
+    return this.productsService.create(user, createProductDto);
   }
 
   @Get()
@@ -47,7 +48,7 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.productsService.remove(id);
+  remove(@User() user: IUser, @Param('id') id: string) {
+    return this.productsService.remove(user, id);
   }
 }

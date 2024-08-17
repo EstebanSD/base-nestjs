@@ -7,6 +7,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { ProductsModule } from './products/products.module';
 import { configuration, getEnvPath, validate } from './config';
+import { NotificationModule } from './notifications/notification.module';
 
 const envFilePath: string = getEnvPath();
 
@@ -28,6 +29,7 @@ const envFilePath: string = getEnvPath();
     UsersModule,
     AuthModule,
     ProductsModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
