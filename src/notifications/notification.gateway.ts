@@ -2,12 +2,10 @@ import {
   WebSocketGateway,
   WebSocketServer,
   OnGatewayConnection,
-  SubscribeMessage,
-  MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { NotificationService } from './notification.service';
-import { ForbiddenException, Logger } from '@nestjs/common';
+import { ForbiddenException, HttpStatus, Logger } from '@nestjs/common';
 import { IUser } from 'src/common/interfaces/user.interface';
 
 @WebSocketGateway({
@@ -26,27 +24,27 @@ export class NotificationGateway implements OnGatewayConnection {
 
   async handleConnection(socket: Socket) {
     try {
-      const userId = await this.notificationService.getUserFromSocket(socket);
-      if (!userId) throw new ForbiddenException('User not authenticated');
+      const user = await this.notificationService.getUserFromSocket(socket);
+      if (!user) throw new ForbiddenException('User not authenticated');
 
-      socket.data.userId = userId;
+      socket.data.userId = user._id;
 
-      socket.emit('connect-success', {
-        message: 'Successfully connected to the WebSocket server!',
+      socket.emit('connection-status', {
+        message: 'Successfully connected to the Notification server',
+        statusCode: HttpStatus.OK,
       });
-    } catch (error) {
-      socket.emit('connect-error', {
-        message: 'Failed to connect to the WebSocket server!',
+    } catch (err) {
+      this.logger.error(err, 'Connection -- NOTIFICATION GATEWAY');
+      socket.emit('connection-status', {
+        message: 'Failed to connect to the Notification server!',
+        statusCode:
+          err instanceof ForbiddenException
+            ? HttpStatus.FORBIDDEN
+            : HttpStatus.INTERNAL_SERVER_ERROR,
       });
 
       socket.disconnect(); // If is necessary
     }
-  }
-
-  // Subscribe Doc Example
-  @SubscribeMessage('events')
-  handleExampleEvent(@MessageBody() data: string): string {
-    return data;
   }
 
   notifyProductCreated(user: IUser, productName: string) {
@@ -59,7 +57,7 @@ export class NotificationGateway implements OnGatewayConnection {
         }
       });
     } catch (err) {
-      this.logger.error(err, 'Notification Product Created -- GATEWAY');
+      this.logger.error(err, 'Product Created -- NOTIFICATION GATEWAY');
     }
   }
 
@@ -73,7 +71,7 @@ export class NotificationGateway implements OnGatewayConnection {
         }
       });
     } catch (err) {
-      this.logger.error(err, 'Notification Product Deleted -- GATEWAY');
+      this.logger.error(err, 'Product Deleted -- NOTIFICATION GATEWAY');
     }
   }
 }

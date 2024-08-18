@@ -103,7 +103,7 @@ export class AuthService {
       });
 
       if (payload?.id) {
-        return this.userModel.findById(payload.id).select('id');
+        return this.userModel.findById(payload.id).select('id name');
       }
       return null;
     } catch (err) {

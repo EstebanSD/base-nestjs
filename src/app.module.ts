@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { ProductsModule } from './products/products.module';
 import { configuration, getEnvPath, validate } from './config';
 import { NotificationModule } from './notifications/notification.module';
+import { ChatModule } from './chat/chat.module';
 
 const envFilePath: string = getEnvPath();
 
@@ -30,6 +31,7 @@ const envFilePath: string = getEnvPath();
     AuthModule,
     ProductsModule,
     NotificationModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService],
