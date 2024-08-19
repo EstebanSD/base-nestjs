@@ -27,7 +27,7 @@ export class NotificationGateway implements OnGatewayConnection {
       const user = await this.notificationService.getUserFromSocket(socket);
       if (!user) throw new ForbiddenException('User not authenticated');
 
-      socket.data.userId = user._id;
+      socket.data.userId = user.id;
 
       socket.emit('connection-status', {
         message: 'Successfully connected to the Notification server',
@@ -47,11 +47,12 @@ export class NotificationGateway implements OnGatewayConnection {
     }
   }
 
-  notifyProductCreated(user: IUser, productName: string) {
+  async notifyProductCreated(user: IUser, productName: string) {
     try {
       // const notify = await this.notificationService...; // Create notify entity maybe?
 
-      this.server.sockets.sockets.forEach((socket) => {
+      const sockets = await this.server.fetchSockets();
+      sockets.forEach((socket) => {
         if (socket.data.userId !== user.id) {
           socket.emit('productCreated', { userName: user.name, productName });
         }
@@ -61,11 +62,12 @@ export class NotificationGateway implements OnGatewayConnection {
     }
   }
 
-  notifyProductDeleted(user: IUser, productName: string) {
+  async notifyProductDeleted(user: IUser, productName: string) {
     try {
       // const notify = await this.notificationService...; // Create notify entity maybe?
 
-      this.server.sockets.sockets.forEach((socket) => {
+      const sockets = await this.server.fetchSockets();
+      sockets.forEach((socket) => {
         if (socket.data.userId !== user.id) {
           socket.emit('productDeleted', { userName: user.name, productName });
         }

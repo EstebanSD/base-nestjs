@@ -38,6 +38,7 @@ export class ProductsController {
     return this.productsService.findOne(id);
   }
 
+  @Roles('Admin')
   @Patch(':id')
   update(
     @User('id') userId: string,
@@ -47,6 +48,7 @@ export class ProductsController {
     return this.productsService.update(id, updateProductDto, userId);
   }
 
+  @Roles('Admin')
   @Delete(':id')
   remove(@User() user: IUser, @Param('id') id: string) {
     return this.productsService.remove(user, id);
