@@ -2,7 +2,6 @@ import {
   WebSocketGateway,
   WebSocketServer,
   OnGatewayConnection,
-  OnGatewayDisconnect,
   SubscribeMessage,
   MessageBody,
   ConnectedSocket,
@@ -17,7 +16,7 @@ import { ChatService } from './chat.service';
   },
   namespace: '/chat',
 })
-export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class ChatGateway implements OnGatewayConnection {
   @WebSocketServer()
   server: Server;
 
@@ -30,13 +29,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const user = await this.chatService.getUserFromSocket(socket);
       if (!user) throw new ForbiddenException('User not authenticated');
 
-      this.chatService.addUserConnection(user.id, socket);
+      // this.chatService.addUserConnection(user.id, socket);
+
+      const { roomIds } = await this.chatService.findAllRooms(user.id);
+
+      roomIds.forEach((roomId) => {
+        socket.join(roomId);
+      });
 
       socket.emit('connection-status', {
         message: 'Successfully connected to the Chat server',
         statusCode: HttpStatus.OK,
       });
-      this.server.emit('connected-users', this.chatService.getConnectedUsers());
+
+      // this.server.emit('connected-users', this.chatService.getConnectedUsers());
     } catch (err) {
       this.logger.error(err, 'Connection -- CHAT GATEWAY');
       socket.emit('connection-status', {
@@ -51,54 +57,55 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  handleDisconnect(@ConnectedSocket() socket: Socket) {
-    try {
-      const userId = socket.data.userId;
-      const roomId = socket.data.roomId;
-
-      if (userId) {
-        this.chatService.removeUserConnection(userId, socket);
-
-        this.server.emit(
-          'connected-users',
-          this.chatService.getConnectedUsers(),
-        );
-
-        if (roomId) {
-          socket.to(roomId).emit('user-left', { userId, roomId });
-        }
-      }
-    } catch (err) {
-      this.logger.error(err, 'Disconnect -- CHAT GATEWAY');
-    }
-  }
+  // handleDisconnect(@ConnectedSocket() socket: Socket) {
+  //   try {
+  //     const userId = socket.data.userId;
+  //     const roomId = socket.data.roomId;
+  //     if (userId) {
+  //       this.chatService.removeUserConnection(userId, socket);
+  //       this.server.emit(
+  //         'connected-users',
+  //         this.chatService.getConnectedUsers(),
+  //       );
+  //       if (roomId) {
+  //         socket.to(roomId).emit('user-left', { userId, roomId });
+  //       }
+  //     }
+  //   } catch (err) {
+  //     this.logger.error(err, 'Disconnect -- CHAT GATEWAY');
+  //   }
+  // }
 
   @SubscribeMessage('join-room')
   async handleJoinRoom(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() data: { userAId: string; userBId: string },
+    @MessageBody() body: any,
   ) {
     try {
-      const { userAId, userBId } = data;
-      const roomId = this.chatService.generateRoomId(userAId, userBId);
-      socket.data.roomId = roomId;
+      const { userAId, userBId } = body;
+      const { roomId } = await this.chatService.createRoom(userAId, userBId);
+
       socket.join(roomId);
-      //   socket.emit('join-room-success', { roomId });
+      socket.emit('join-room-status', {
+        roomId,
+        statusCode: HttpStatus.OK,
+      });
     } catch (err) {
       this.logger.error(err, 'Join Room -- CHAT GATEWAY');
-      //   socket.emit('join-room-error', {
-      //     message: 'Failed to join the room',
-      //   });
+      socket.emit('join-room-status', {
+        message: 'Failed to join the room',
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+      });
     }
   }
 
   @SubscribeMessage('send-message')
   async handleMessage(
-    @MessageBody() message: string,
     @ConnectedSocket() socket: Socket,
+    @MessageBody() body: any,
   ) {
     try {
-      const roomId = socket.data.roomId;
+      const { roomId, message } = body;
       if (!roomId) {
         throw new Error('RoomId not found');
       }
@@ -116,17 +123,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('leave-room')
-  handleLeaveRoom(@ConnectedSocket() socket: Socket) {
+  async handleLeaveRoom(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: any,
+  ) {
     try {
-      const roomId = socket.data.roomId;
-      const userId = socket.data.userId;
-
-      if (!roomId || !userId) {
-        throw new Error('RoomId or UserId not founds');
-      }
-
+      const { roomId, userId } = body;
       socket.leave(roomId);
-      delete socket.data.roomId;
+
+      await this.chatService.removeFromRoom(roomId, userId);
 
       //   this.server.to(roomId).emit('user-left', { userId, roomId });
     } catch (err) {
