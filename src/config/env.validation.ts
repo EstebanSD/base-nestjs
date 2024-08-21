@@ -32,6 +32,10 @@ export class EnvValidation {
   @IsString()
   @IsOptional()
   JWT_EXPIRES_IN: string;
+
+  @IsString()
+  @IsNotEmpty()
+  REDIS_URL: string;
 }
 
 export function validate(config: Record<string, unknown>) {

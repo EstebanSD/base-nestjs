@@ -5,17 +5,28 @@ import { Socket } from 'socket.io';
 import { AuthService } from 'src/auth/auth.service';
 import { Room } from './schemas/room.schema';
 import { Model } from 'mongoose';
+import { RedisClientType, createClient } from 'redis';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
 
-  private connectedUsers: Map<string, Socket[]> = new Map();
+  // private connectedUsers: Map<string, Socket[]> = new Map();
+  private redisClient: RedisClientType;
 
   constructor(
     @InjectModel(Room.name) private roomModel: Model<Room>,
     private readonly authService: AuthService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    (this.redisClient = createClient({
+      url: this.configService.get<string>('redisUrl'),
+    })),
+      this.redisClient.connect().catch((err) => {
+        this.logger.error('Failed to connect to Redis', err);
+      });
+  }
 
   async getUserFromSocket(socket: Socket) {
     const authToken = socket.handshake.headers.authorization?.split(' ')[1];
@@ -38,31 +49,64 @@ export class ChatService {
     return [userAId, userBId].sort().join('-');
   }
 
-  addUserConnection(userId: string, socket: Socket) {
-    if (this.connectedUsers.has(userId)) {
-      this.connectedUsers.get(userId)?.push(socket);
-    } else {
-      this.connectedUsers.set(userId, [socket]);
-    }
+  // addUserConnection(userId: string, socket: Socket) {
+  //   if (this.connectedUsers.has(userId)) {
+  //     this.connectedUsers.get(userId)?.push(socket);
+  //   } else {
+  //     this.connectedUsers.set(userId, [socket]);
+  //   }
 
-    socket.data.userId = userId;
+  //   socket.data.userId = userId;
+  // }
+  // removeUserConnection(userId: string, socket: Socket) {
+  //   const userSockets = this.connectedUsers.get(userId);
+  //   if (userSockets) {
+  //     const index = userSockets.indexOf(socket);
+  //     if (index !== -1) {
+  //       userSockets.splice(index, 1);
+  //     }
+  //     if (userSockets.length === 0) {
+  //       this.connectedUsers.delete(userId);
+  //     }
+  //   }
+  // }
+  // getConnectedUsers(): string[] {
+  //   return Array.from(this.connectedUsers.keys());
+  // }
+
+  async addUserConnection(userId: string, socketId: string): Promise<void> {
+    try {
+      await this.redisClient.hSet('online-users', userId, socketId);
+    } catch (err) {
+      this.logger.error('Failed to add user connection', err);
+    }
   }
 
-  removeUserConnection(userId: string, socket: Socket) {
-    const userSockets = this.connectedUsers.get(userId);
-    if (userSockets) {
-      const index = userSockets.indexOf(socket);
-      if (index !== -1) {
-        userSockets.splice(index, 1);
-      }
-      if (userSockets.length === 0) {
-        this.connectedUsers.delete(userId);
-      }
+  async removeUserConnection(userId: string): Promise<void> {
+    try {
+      await this.redisClient.hDel('online-users', userId);
+    } catch (err) {
+      this.logger.error('Failed to remove user connection', err);
     }
   }
 
-  getConnectedUsers(): string[] {
-    return Array.from(this.connectedUsers.keys());
+  async getUserSocketId(userId: string): Promise<string | null> {
+    try {
+      return await this.redisClient.hGet('online-users', userId);
+    } catch (err) {
+      this.logger.error('Failed to get user socket ID', err);
+      return null;
+    }
+  }
+
+  async isUserConnected(userId: string): Promise<boolean> {
+    try {
+      const socketId = await this.getUserSocketId(userId);
+      return socketId !== null;
+    } catch (err) {
+      this.logger.error('Failed to check user connection', err);
+      return false;
+    }
   }
 
   /// Room Service ///

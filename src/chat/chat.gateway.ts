@@ -5,6 +5,7 @@ import {
   SubscribeMessage,
   MessageBody,
   ConnectedSocket,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { ForbiddenException, HttpStatus, Logger } from '@nestjs/common';
@@ -16,7 +17,7 @@ import { ChatService } from './chat.service';
   },
   namespace: '/chat',
 })
-export class ChatGateway implements OnGatewayConnection {
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -29,7 +30,7 @@ export class ChatGateway implements OnGatewayConnection {
       const user = await this.chatService.getUserFromSocket(socket);
       if (!user) throw new ForbiddenException('User not authenticated');
 
-      // this.chatService.addUserConnection(user.id, socket);
+      await this.chatService.addUserConnection(user.id, socket.id);
 
       const { roomIds } = await this.chatService.findAllRooms(user.id);
 
@@ -57,24 +58,16 @@ export class ChatGateway implements OnGatewayConnection {
     }
   }
 
-  // handleDisconnect(@ConnectedSocket() socket: Socket) {
-  //   try {
-  //     const userId = socket.data.userId;
-  //     const roomId = socket.data.roomId;
-  //     if (userId) {
-  //       this.chatService.removeUserConnection(userId, socket);
-  //       this.server.emit(
-  //         'connected-users',
-  //         this.chatService.getConnectedUsers(),
-  //       );
-  //       if (roomId) {
-  //         socket.to(roomId).emit('user-left', { userId, roomId });
-  //       }
-  //     }
-  //   } catch (err) {
-  //     this.logger.error(err, 'Disconnect -- CHAT GATEWAY');
-  //   }
-  // }
+  async handleDisconnect(@ConnectedSocket() socket: Socket) {
+    try {
+      const user = await this.chatService.getUserFromSocket(socket);
+      if (!user) throw new ForbiddenException('User not authenticated');
+
+      await this.chatService.removeUserConnection(user.id);
+    } catch (err) {
+      this.logger.error(err, 'Disconnect -- CHAT GATEWAY');
+    }
+  }
 
   @SubscribeMessage('join-room')
   async handleJoinRoom(
@@ -82,10 +75,25 @@ export class ChatGateway implements OnGatewayConnection {
     @MessageBody() body: any,
   ) {
     try {
-      const { userAId, userBId } = body;
-      const { roomId } = await this.chatService.createRoom(userAId, userBId);
+      const { userBId } = body;
+      const user = await this.chatService.getUserFromSocket(socket);
+      if (!user) throw new ForbiddenException('User not authenticated');
+
+      const { roomId } = await this.chatService.createRoom(user.id, userBId);
 
       socket.join(roomId);
+
+      const otherUserSocketId = await this.chatService.getUserSocketId(userBId);
+
+      if (otherUserSocketId) {
+        const sockets = await this.server.fetchSockets();
+        const otherUserSocket = sockets.find((s) => s.id === otherUserSocketId);
+
+        if (otherUserSocket) {
+          otherUserSocket.join(roomId);
+        }
+      }
+
       socket.emit('join-room-status', {
         roomId,
         statusCode: HttpStatus.OK,
@@ -105,14 +113,15 @@ export class ChatGateway implements OnGatewayConnection {
     @MessageBody() body: any,
   ) {
     try {
+      const user = await this.chatService.getUserFromSocket(socket);
+      if (!user) throw new ForbiddenException('User not authenticated');
+
       const { roomId, message } = body;
       if (!roomId) {
         throw new Error('RoomId not found');
       }
 
-      this.server
-        .to(roomId)
-        .emit('new-message', { from: socket.data.userId, message });
+      this.server.to(roomId).emit('new-message', { from: user.name, message });
     } catch (err) {
       this.logger.error(err, 'Send Message -- CHAT GATEWAY');
       socket.emit('send-message-error', {
