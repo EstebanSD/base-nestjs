@@ -8,8 +8,15 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { ForbiddenException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  HttpStatus,
+  Logger,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { ChatService } from './chat.service';
+import { JoinRoomDto, LeaveRoomDto, SendMessageDto } from './dto';
 
 @WebSocketGateway({
   cors: {
@@ -30,6 +37,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const user = await this.chatService.getUserFromSocket(socket);
       if (!user) throw new ForbiddenException('User not authenticated');
 
+      socket.data.user = user;
       await this.chatService.addUserConnection(user.id, socket.id);
 
       const { roomIds } = await this.chatService.findAllRooms(user.id);
@@ -60,27 +68,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleDisconnect(@ConnectedSocket() socket: Socket) {
     try {
-      const user = await this.chatService.getUserFromSocket(socket);
+      const user = socket.data.user;
       if (!user) throw new ForbiddenException('User not authenticated');
-
       await this.chatService.removeUserConnection(user.id);
+      socket.data.user;
     } catch (err) {
       this.logger.error(err, 'Disconnect -- CHAT GATEWAY');
     }
   }
 
   @SubscribeMessage('join-room')
+  @UsePipes(new ValidationPipe({ whitelist: true }))
   async handleJoinRoom(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() body: any,
+    @MessageBody() body: JoinRoomDto,
   ) {
     try {
       const { userBId } = body;
-      const user = await this.chatService.getUserFromSocket(socket);
+      const user = socket.data.user;
       if (!user) throw new ForbiddenException('User not authenticated');
 
       const { roomId } = await this.chatService.createRoom(user.id, userBId);
 
+      // TODO Should I check if it exists?
       socket.join(roomId);
 
       const otherUserSocketId = await this.chatService.getUserSocketId(userBId);
@@ -95,52 +105,62 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       socket.emit('join-room-status', {
-        roomId,
+        message: `Successfully connected to the room: ${roomId}`,
         statusCode: HttpStatus.OK,
       });
     } catch (err) {
       this.logger.error(err, 'Join Room -- CHAT GATEWAY');
       socket.emit('join-room-status', {
         message: 'Failed to join the room',
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        statusCode:
+          err instanceof ForbiddenException
+            ? HttpStatus.FORBIDDEN
+            : HttpStatus.INTERNAL_SERVER_ERROR,
       });
     }
   }
 
   @SubscribeMessage('send-message')
+  @UsePipes(new ValidationPipe({ whitelist: true }))
   async handleMessage(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() body: any,
+    @MessageBody() body: SendMessageDto,
   ) {
     try {
-      const user = await this.chatService.getUserFromSocket(socket);
+      const { roomId, message } = body;
+
+      const user = socket.data.user;
       if (!user) throw new ForbiddenException('User not authenticated');
 
-      const { roomId, message } = body;
-      if (!roomId) {
-        throw new Error('RoomId not found');
-      }
-
-      this.server.to(roomId).emit('new-message', { from: user.name, message });
+      this.server
+        .to(roomId)
+        .emit('new-message', { from: user, room: roomId, message });
     } catch (err) {
       this.logger.error(err, 'Send Message -- CHAT GATEWAY');
       socket.emit('send-message-error', {
         message: 'Failed to send message',
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        statusCode:
+          err instanceof ForbiddenException
+            ? HttpStatus.FORBIDDEN
+            : HttpStatus.INTERNAL_SERVER_ERROR,
       });
     }
   }
 
   @SubscribeMessage('leave-room')
+  @UsePipes(new ValidationPipe({ whitelist: true }))
   async handleLeaveRoom(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() body: any,
+    @MessageBody() body: LeaveRoomDto,
   ) {
     try {
-      const { roomId, userId } = body;
-      socket.leave(roomId);
+      const { roomId } = body;
+      const user = socket.data.user;
 
-      await this.chatService.removeFromRoom(roomId, userId);
+      if (!user) throw new ForbiddenException('User not authenticated');
+
+      socket.leave(roomId);
+      await this.chatService.removeFromRoom(roomId, user.id);
 
       //   this.server.to(roomId).emit('user-left', { userId, roomId });
     } catch (err) {

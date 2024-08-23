@@ -4,7 +4,7 @@ import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 export class UpdateUserDto {
   @ApiProperty({
     description: 'The name of the User',
-    example: 'Agus el sopla quena', // TODO
+    example: 'UserName',
     required: false,
   })
   @IsString()
