@@ -7,6 +7,7 @@ import { Room } from './schemas/room.schema';
 import { Model } from 'mongoose';
 import { RedisClientType, createClient } from 'redis';
 import { ConfigService } from '@nestjs/config';
+import { MessageDto } from './dto';
 
 @Injectable()
 export class ChatService {
@@ -110,7 +111,6 @@ export class ChatService {
   }
 
   /// Room Service ///
-  // Actualizamos la creación de room para inicializar los mensajes
   async createRoom(userAId: string, userBId: string) {
     try {
       const roomId = this.generateRoomId(userAId, userBId);
@@ -120,9 +120,9 @@ export class ChatService {
         room = await this.roomModel.create({
           user: [userAId, userBId],
           roomId,
-          messages: [], // Inicializamos el array de mensajes vacío
         });
       } else {
+        // TODO Improve
         const userSet = new Set(room.user.map((id) => id.toString()));
         if (!userSet.has(userAId) || !userSet.has(userBId)) {
           const users = Array.from(new Set([userAId, userBId]));
@@ -136,11 +136,7 @@ export class ChatService {
     }
   }
 
-  // Agregamos un nuevo método para guardar mensajes en la base de datos
-  async saveMessage(
-    roomId: string,
-    message: { senderId: string; content: string; timestamp: Date },
-  ) {
+  async saveMessage(roomId: string, message: MessageDto) {
     try {
       await this.roomModel.updateOne(
         { roomId },
@@ -151,7 +147,6 @@ export class ChatService {
     }
   }
 
-  // Método para obtener los detalles del room (incluyendo mensajes)
   async getRoomDetails(roomId: string) {
     try {
       const room = await this.roomModel.findOne({ roomId }).populate('user');

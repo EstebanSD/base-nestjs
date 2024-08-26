@@ -10,13 +10,10 @@ export class Room {
   roomId: string;
 
   @Prop({
-    type: [
-      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
-    ],
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   })
   user: User[];
 
-  // Agregamos una nueva propiedad para almacenar los mensajes
   @Prop({
     type: [{ senderId: String, content: String, timestamp: Date }],
     default: [],

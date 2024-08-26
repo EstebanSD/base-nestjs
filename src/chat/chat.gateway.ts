@@ -16,7 +16,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
-import { JoinRoomDto, LeaveRoomDto, SendMessageDto } from './dto';
+import { JoinRoomDto, RoomDto, SendMessageDto } from './dto';
 
 @WebSocketGateway({
   cors: {
@@ -77,7 +77,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // chat.gateway.ts
   @SubscribeMessage('join-room')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async handleJoinRoom(
@@ -91,7 +90,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const { roomId } = await this.chatService.createRoom(user.id, userBId);
 
-      // Join the room in Socket.IO
       socket.join(roomId);
 
       const otherUserSocketId = await this.chatService.getUserSocketId(userBId);
@@ -105,11 +103,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
 
-      // Aquí es donde se modifica para enviar el `roomId` al cliente
       socket.emit('join-room-status', {
-        message: `Successfully connected to the room: ${roomId}`,
+        message: 'Successfully connected to the room',
         statusCode: HttpStatus.OK,
-        roomId: roomId, // Incluimos el `roomId` en la respuesta
+        roomId: roomId,
       });
     } catch (err) {
       this.logger.error(err, 'Join Room -- CHAT GATEWAY');
@@ -119,6 +116,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           err instanceof ForbiddenException
             ? HttpStatus.FORBIDDEN
             : HttpStatus.INTERNAL_SERVER_ERROR,
+        roomId: null,
       });
     }
   }
@@ -134,14 +132,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const user = socket.data.user;
       if (!user) throw new ForbiddenException('User not authenticated');
 
-      // Guardar el mensaje en la base de datos
       await this.chatService.saveMessage(roomId, {
         senderId: user.id,
-        content: message, //.content???
-        timestamp: new Date(), // Usar la hora actual como marca de tiempo
+        content: message,
+        timestamp: new Date(),
       });
 
-      // Emitir el mensaje a todos los usuarios en el room
       this.server
         .to(roomId)
         .emit('new-message', { from: user, room: roomId, message });
@@ -158,9 +154,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('get-room-details')
+  @UsePipes(new ValidationPipe({ whitelist: true }))
   async handleGetRoomDetails(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() body: { roomId: string },
+    @MessageBody() body: RoomDto,
   ) {
     try {
       const { roomId } = body;
@@ -179,7 +176,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async handleLeaveRoom(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() body: LeaveRoomDto,
+    @MessageBody() body: RoomDto,
   ) {
     try {
       const { roomId } = body;
