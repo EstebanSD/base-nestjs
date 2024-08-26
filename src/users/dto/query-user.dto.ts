@@ -13,7 +13,7 @@ import { PaginationDto } from 'src/common/dto';
 export class QueryUserDto extends PartialType(PaginationDto) {
   @ApiProperty({
     description: 'The name or email of the User',
-    example: 'Agus mamapinga', // TODO
+    example: 'UserName',
     required: false,
   })
   @IsString()

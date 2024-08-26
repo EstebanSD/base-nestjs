@@ -2,14 +2,21 @@ import {
   WebSocketGateway,
   WebSocketServer,
   OnGatewayConnection,
-  OnGatewayDisconnect,
   SubscribeMessage,
   MessageBody,
   ConnectedSocket,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { ForbiddenException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  HttpStatus,
+  Logger,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { ChatService } from './chat.service';
+import { JoinRoomDto, LeaveRoomDto, SendMessageDto } from './dto';
 
 @WebSocketGateway({
   cors: {
@@ -30,13 +37,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const user = await this.chatService.getUserFromSocket(socket);
       if (!user) throw new ForbiddenException('User not authenticated');
 
-      this.chatService.addUserConnection(user.id, socket);
+      socket.data.user = user;
+      await this.chatService.addUserConnection(user.id, socket.id);
+
+      const { roomIds } = await this.chatService.findAllRooms(user.id);
+
+      roomIds.forEach((roomId) => {
+        socket.join(roomId);
+      });
 
       socket.emit('connection-status', {
         message: 'Successfully connected to the Chat server',
         statusCode: HttpStatus.OK,
       });
-      this.server.emit('connected-users', this.chatService.getConnectedUsers());
+
+      // this.server.emit('connected-users', this.chatService.getConnectedUsers());
     } catch (err) {
       this.logger.error(err, 'Connection -- CHAT GATEWAY');
       socket.emit('connection-status', {
@@ -51,82 +66,101 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  handleDisconnect(@ConnectedSocket() socket: Socket) {
+  async handleDisconnect(@ConnectedSocket() socket: Socket) {
     try {
-      const userId = socket.data.userId;
-      const roomId = socket.data.roomId;
-
-      if (userId) {
-        this.chatService.removeUserConnection(userId, socket);
-
-        this.server.emit(
-          'connected-users',
-          this.chatService.getConnectedUsers(),
-        );
-
-        if (roomId) {
-          socket.to(roomId).emit('user-left', { userId, roomId });
-        }
-      }
+      const user = socket.data.user;
+      if (!user) throw new ForbiddenException('User not authenticated');
+      await this.chatService.removeUserConnection(user.id);
+      socket.data.user;
     } catch (err) {
       this.logger.error(err, 'Disconnect -- CHAT GATEWAY');
     }
   }
 
   @SubscribeMessage('join-room')
+  @UsePipes(new ValidationPipe({ whitelist: true }))
   async handleJoinRoom(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() data: { userAId: string; userBId: string },
+    @MessageBody() body: JoinRoomDto,
   ) {
     try {
-      const { userAId, userBId } = data;
-      const roomId = this.chatService.generateRoomId(userAId, userBId);
-      socket.data.roomId = roomId;
+      const { userBId } = body;
+      const user = socket.data.user;
+      if (!user) throw new ForbiddenException('User not authenticated');
+
+      const { roomId } = await this.chatService.createRoom(user.id, userBId);
+
+      // TODO Should I check if it exists?
       socket.join(roomId);
-      //   socket.emit('join-room-success', { roomId });
+
+      const otherUserSocketId = await this.chatService.getUserSocketId(userBId);
+
+      if (otherUserSocketId) {
+        const sockets = await this.server.fetchSockets();
+        const otherUserSocket = sockets.find((s) => s.id === otherUserSocketId);
+
+        if (otherUserSocket) {
+          otherUserSocket.join(roomId);
+        }
+      }
+
+      socket.emit('join-room-status', {
+        message: `Successfully connected to the room: ${roomId}`,
+        statusCode: HttpStatus.OK,
+      });
     } catch (err) {
       this.logger.error(err, 'Join Room -- CHAT GATEWAY');
-      //   socket.emit('join-room-error', {
-      //     message: 'Failed to join the room',
-      //   });
+      socket.emit('join-room-status', {
+        message: 'Failed to join the room',
+        statusCode:
+          err instanceof ForbiddenException
+            ? HttpStatus.FORBIDDEN
+            : HttpStatus.INTERNAL_SERVER_ERROR,
+      });
     }
   }
 
   @SubscribeMessage('send-message')
+  @UsePipes(new ValidationPipe({ whitelist: true }))
   async handleMessage(
-    @MessageBody() message: string,
     @ConnectedSocket() socket: Socket,
+    @MessageBody() body: SendMessageDto,
   ) {
     try {
-      const roomId = socket.data.roomId;
-      if (!roomId) {
-        throw new Error('RoomId not found');
-      }
+      const { roomId, message } = body;
+
+      const user = socket.data.user;
+      if (!user) throw new ForbiddenException('User not authenticated');
 
       this.server
         .to(roomId)
-        .emit('new-message', { from: socket.data.userId, message });
+        .emit('new-message', { from: user, room: roomId, message });
     } catch (err) {
       this.logger.error(err, 'Send Message -- CHAT GATEWAY');
       socket.emit('send-message-error', {
         message: 'Failed to send message',
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        statusCode:
+          err instanceof ForbiddenException
+            ? HttpStatus.FORBIDDEN
+            : HttpStatus.INTERNAL_SERVER_ERROR,
       });
     }
   }
 
   @SubscribeMessage('leave-room')
-  handleLeaveRoom(@ConnectedSocket() socket: Socket) {
+  @UsePipes(new ValidationPipe({ whitelist: true }))
+  async handleLeaveRoom(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: LeaveRoomDto,
+  ) {
     try {
-      const roomId = socket.data.roomId;
-      const userId = socket.data.userId;
+      const { roomId } = body;
+      const user = socket.data.user;
 
-      if (!roomId || !userId) {
-        throw new Error('RoomId or UserId not founds');
-      }
+      if (!user) throw new ForbiddenException('User not authenticated');
 
       socket.leave(roomId);
-      delete socket.data.roomId;
+      await this.chatService.removeFromRoom(roomId, user.id);
 
       //   this.server.to(roomId).emit('user-left', { userId, roomId });
     } catch (err) {
