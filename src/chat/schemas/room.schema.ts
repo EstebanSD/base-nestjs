@@ -10,11 +10,15 @@ export class Room {
   roomId: string;
 
   @Prop({
-    type: [
-      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
-    ],
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   })
   user: User[];
+
+  @Prop({
+    type: [{ senderId: String, content: String, timestamp: Date }],
+    default: [],
+  })
+  messages: { senderId: string; content: string; timestamp: Date }[];
 }
 
 export const RoomSchema = SchemaFactory.createForClass(Room);

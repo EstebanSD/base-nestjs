@@ -16,7 +16,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
-import { JoinRoomDto, LeaveRoomDto, SendMessageDto } from './dto';
+import { JoinRoomDto, RoomDto, SendMessageDto } from './dto';
 
 @WebSocketGateway({
   cors: {
@@ -90,7 +90,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const { roomId } = await this.chatService.createRoom(user.id, userBId);
 
-      // TODO Should I check if it exists?
       socket.join(roomId);
 
       const otherUserSocketId = await this.chatService.getUserSocketId(userBId);
@@ -105,8 +104,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       socket.emit('join-room-status', {
-        message: `Successfully connected to the room: ${roomId}`,
+        message: 'Successfully connected to the room',
         statusCode: HttpStatus.OK,
+        roomId: roomId,
       });
     } catch (err) {
       this.logger.error(err, 'Join Room -- CHAT GATEWAY');
@@ -116,6 +116,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           err instanceof ForbiddenException
             ? HttpStatus.FORBIDDEN
             : HttpStatus.INTERNAL_SERVER_ERROR,
+        roomId: null,
       });
     }
   }
@@ -128,9 +129,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const { roomId, message } = body;
-
       const user = socket.data.user;
       if (!user) throw new ForbiddenException('User not authenticated');
+
+      await this.chatService.saveMessage(roomId, {
+        senderId: user.id,
+        content: message,
+        timestamp: new Date(),
+      });
 
       this.server
         .to(roomId)
@@ -147,11 +153,30 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @SubscribeMessage('get-room-details')
+  @UsePipes(new ValidationPipe({ whitelist: true }))
+  async handleGetRoomDetails(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: RoomDto,
+  ) {
+    try {
+      const { roomId } = body;
+      const roomDetails = await this.chatService.getRoomDetails(roomId);
+      socket.emit('room-details', roomDetails);
+    } catch (err) {
+      this.logger.error(err, 'Get Room Details -- CHAT GATEWAY');
+      socket.emit('error', {
+        message: 'Failed to retrieve room details',
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+      });
+    }
+  }
+
   @SubscribeMessage('leave-room')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async handleLeaveRoom(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() body: LeaveRoomDto,
+    @MessageBody() body: RoomDto,
   ) {
     try {
       const { roomId } = body;

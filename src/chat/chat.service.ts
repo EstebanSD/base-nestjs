@@ -7,6 +7,7 @@ import { Room } from './schemas/room.schema';
 import { Model } from 'mongoose';
 import { RedisClientType, createClient } from 'redis';
 import { ConfigService } from '@nestjs/config';
+import { MessageDto } from './dto';
 
 @Injectable()
 export class ChatService {
@@ -132,6 +133,31 @@ export class ChatService {
       return { roomId: room.roomId };
     } catch (err) {
       this.logger.error(err, 'ROOM CREATE -- CHAT SERVICE');
+    }
+  }
+
+  async saveMessage(roomId: string, message: MessageDto) {
+    try {
+      await this.roomModel.updateOne(
+        { roomId },
+        { $push: { messages: message } },
+      );
+    } catch (err) {
+      this.logger.error(err, 'SAVE MESSAGE -- CHAT SERVICE');
+    }
+  }
+
+  async getRoomDetails(roomId: string) {
+    try {
+      const room = await this.roomModel.findOne({ roomId }).populate('user');
+      if (!room) {
+        throw new Error('Room not found');
+      }
+
+      return room;
+    } catch (err) {
+      this.logger.error(err, 'GET ROOM DETAILS -- CHAT SERVICE');
+      throw new Error('Failed to retrieve room details');
     }
   }
 
