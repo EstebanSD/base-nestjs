@@ -15,6 +15,13 @@ export class Room {
     ],
   })
   user: User[];
+
+  // Agregamos una nueva propiedad para almacenar los mensajes
+  @Prop({
+    type: [{ senderId: String, content: String, timestamp: Date }],
+    default: [],
+  })
+  messages: { senderId: string; content: string; timestamp: Date }[];
 }
 
 export const RoomSchema = SchemaFactory.createForClass(Room);

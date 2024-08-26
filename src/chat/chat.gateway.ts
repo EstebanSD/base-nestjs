@@ -77,6 +77,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  // chat.gateway.ts
   @SubscribeMessage('join-room')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async handleJoinRoom(
@@ -90,7 +91,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const { roomId } = await this.chatService.createRoom(user.id, userBId);
 
-      // TODO Should I check if it exists?
+      // Join the room in Socket.IO
       socket.join(roomId);
 
       const otherUserSocketId = await this.chatService.getUserSocketId(userBId);
@@ -104,9 +105,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
 
+      // Aquí es donde se modifica para enviar el `roomId` al cliente
       socket.emit('join-room-status', {
         message: `Successfully connected to the room: ${roomId}`,
         statusCode: HttpStatus.OK,
+        roomId: roomId, // Incluimos el `roomId` en la respuesta
       });
     } catch (err) {
       this.logger.error(err, 'Join Room -- CHAT GATEWAY');
@@ -128,10 +131,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       const { roomId, message } = body;
-
       const user = socket.data.user;
       if (!user) throw new ForbiddenException('User not authenticated');
 
+      // Guardar el mensaje en la base de datos
+      await this.chatService.saveMessage(roomId, {
+        senderId: user.id,
+        content: message, //.content???
+        timestamp: new Date(), // Usar la hora actual como marca de tiempo
+      });
+
+      // Emitir el mensaje a todos los usuarios en el room
       this.server
         .to(roomId)
         .emit('new-message', { from: user, room: roomId, message });
@@ -143,6 +153,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           err instanceof ForbiddenException
             ? HttpStatus.FORBIDDEN
             : HttpStatus.INTERNAL_SERVER_ERROR,
+      });
+    }
+  }
+
+  @SubscribeMessage('get-room-details')
+  async handleGetRoomDetails(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: { roomId: string },
+  ) {
+    try {
+      const { roomId } = body;
+      const roomDetails = await this.chatService.getRoomDetails(roomId);
+      socket.emit('room-details', roomDetails);
+    } catch (err) {
+      this.logger.error(err, 'Get Room Details -- CHAT GATEWAY');
+      socket.emit('error', {
+        message: 'Failed to retrieve room details',
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       });
     }
   }

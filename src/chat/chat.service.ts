@@ -110,6 +110,7 @@ export class ChatService {
   }
 
   /// Room Service ///
+  // Actualizamos la creación de room para inicializar los mensajes
   async createRoom(userAId: string, userBId: string) {
     try {
       const roomId = this.generateRoomId(userAId, userBId);
@@ -119,9 +120,9 @@ export class ChatService {
         room = await this.roomModel.create({
           user: [userAId, userBId],
           roomId,
+          messages: [], // Inicializamos el array de mensajes vacío
         });
       } else {
-        // TODO Improve
         const userSet = new Set(room.user.map((id) => id.toString()));
         if (!userSet.has(userAId) || !userSet.has(userBId)) {
           const users = Array.from(new Set([userAId, userBId]));
@@ -132,6 +133,36 @@ export class ChatService {
       return { roomId: room.roomId };
     } catch (err) {
       this.logger.error(err, 'ROOM CREATE -- CHAT SERVICE');
+    }
+  }
+
+  // Agregamos un nuevo método para guardar mensajes en la base de datos
+  async saveMessage(
+    roomId: string,
+    message: { senderId: string; content: string; timestamp: Date },
+  ) {
+    try {
+      await this.roomModel.updateOne(
+        { roomId },
+        { $push: { messages: message } },
+      );
+    } catch (err) {
+      this.logger.error(err, 'SAVE MESSAGE -- CHAT SERVICE');
+    }
+  }
+
+  // Método para obtener los detalles del room (incluyendo mensajes)
+  async getRoomDetails(roomId: string) {
+    try {
+      const room = await this.roomModel.findOne({ roomId }).populate('user');
+      if (!room) {
+        throw new Error('Room not found');
+      }
+
+      return room;
+    } catch (err) {
+      this.logger.error(err, 'GET ROOM DETAILS -- CHAT SERVICE');
+      throw new Error('Failed to retrieve room details');
     }
   }
 
