@@ -19,6 +19,7 @@ export class ChatController {
     return await this.chatService.getRoomDetails(roomId);
   }
 
+  /// THIS IS ONLY FOR WEB SOCKET DOCUMENTATION!!!!! ///
   @Get('websocket-events')
   @ApiOperation({
     summary: 'WebSocket Event Overview',
