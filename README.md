@@ -23,30 +23,23 @@ This is a [NestJS](https://github.com/nestjs/nest) framework TypeScript project.
 ## Prerequisites
 
 1. **Node.js** - Ensure you have Node.js installed. This project is built with Node.js v14+.
-2. **Redis** - You need to create a Redis account and database.
+2. **Redis** - You need to create a Redis account and database (cache cloud service).
 3. **MongoDB** - You need to create a MongoDB account and database.
 
 ## Installation
 
-1. Clone the repository:
-
-```bash
-$ git clone <repository-url>
-$ cd <repository-name>
-```
-
-2. Install dependencies:
+1. Install dependencies:
 
 ```bash
 $ npm install
 ```
 
-3. Set up environment variables:
+2. Set up environment variables:
 
 - Create a `.env.dev` file in the root of your project.
 - Add your environment variables, using those in the `.env.example` file as a guide.
 
-4. Running the App:
+3. Running the App:
 
 ```bash
 $ npm run dev
