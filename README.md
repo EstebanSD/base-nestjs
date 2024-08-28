@@ -30,15 +30,15 @@ This is a [NestJS](https://github.com/nestjs/nest) framework TypeScript project.
 
 1. Clone the repository:
 
-   ```bash
-   $ git clone <repository-url>
-   $ cd <repository-name>
-   ```
+```bash
+$ git clone <repository-url>
+$ cd <repository-name>
+```
 
 2. Install dependencies:
 
 ```bash
-  $ npm install
+$ npm install
 ```
 
 3. Set up environment variables:
@@ -49,7 +49,7 @@ This is a [NestJS](https://github.com/nestjs/nest) framework TypeScript project.
 4. Running the App:
 
 ```bash
-  $ npm run dev
+$ npm run dev
 ```
 
 ## Support
